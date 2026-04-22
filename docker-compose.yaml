@@ -5,9 +5,13 @@ x-airflow-common: &airflow-common
     context: .
     dockerfile: Dockerfile.airflow
   environment:
-    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+    # Dentro de la red de Docker, se usa el puerto interno 5432
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    # Credenciales automáticas para la interfaz web
+    - _AIRFLOW_WWW_USER_USERNAME=admin
+    - _AIRFLOW_WWW_USER_PASSWORD=admin
   volumes:
     - ./dags:/opt/airflow/dags
     - ./scripts:/opt/airflow/scripts
@@ -16,24 +20,29 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
+    container_name: ml_project_db
     image: postgres:13
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     ports:
-      - "5430:5430"
+      - "5430:5432"
 
   airflow-init:
     <<: *airflow-common
-    command: airflow db init
+    container_name: airflow_init
+    # Este comando inicializa la DB y crea el usuario definido en las variables de entorno
+    command: version && airflow db init && airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin
 
   scheduler:
+    container_name: airflow_scheduler
     <<: *airflow-common
     command: airflow scheduler
     restart: always
 
   webserver:
+    container_name: airflow_webserver
     <<: *airflow-common
     command: airflow webserver
     restart: always
@@ -41,6 +50,7 @@ services:
       - "8080:8080"
 
   api:
+    container_name: recommendation_api
     build:
       context: .
       dockerfile: Dockerfile.api

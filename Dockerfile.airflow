@@ -1,0 +1,17 @@
+FROM apache/airflow:2.7.1-python3.10
+
+USER root
+# Instalamos lo necesario para compilar el motor de ML
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Instalación en orden para evitar el error de "No module named pip"
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir numpy==1.23.5 cython
+RUN pip install --no-cache-dir scikit-surprise==1.1.3 --no-build-isolation

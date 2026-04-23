@@ -3,3 +3,7 @@ numpy==1.23.5
 fastapi
 uvicorn
 requests
+sqlalchemy
+psycopg2-binary
+apache-airflow
+apache-airflow-providers-postgres

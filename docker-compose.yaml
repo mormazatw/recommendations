@@ -1,15 +1,11 @@
-version: '3.8'
-
 x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: Dockerfile.airflow
   environment:
-    # Dentro de la red de Docker, se usa el puerto interno 5432
     - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     - AIRFLOW__CORE__LOAD_EXAMPLES=False
-    # Credenciales automáticas para la interfaz web
     - _AIRFLOW_WWW_USER_USERNAME=admin
     - _AIRFLOW_WWW_USER_PASSWORD=admin
   volumes:
@@ -20,7 +16,7 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
-    container_name: ml_project_db
+    container_name: postgres
     image: postgres:13
     environment:
       POSTGRES_USER: airflow
@@ -32,8 +28,21 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: airflow_init
-    # Este comando inicializa la DB y crea el usuario definido en las variables de entorno
-    command: version && airflow db init && airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        # Creamos el esquema 'data' para tus alumnos
+        psql $AIRFLOW__DATABASE__SQL_ALCHEMY_CONN -c "CREATE SCHEMA IF NOT EXISTS data;"
+        # Creamos el usuario
+        airflow users create \
+            --username admin \
+            --firstname Admin \
+            --lastname User \
+            --role Admin \
+            --email admin@example.com \
+            --password admin
 
   scheduler:
     container_name: airflow_scheduler
@@ -50,13 +59,15 @@ services:
       - "8080:8080"
 
   api:
-    container_name: recommendation_api
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./scripts:/app
-    depends_on:
-      - postgres
+      build:
+        context: .
+        dockerfile: Dockerfile.api
+      container_name: recommendations_api
+      volumes:
+        - ./scripts:/app
+      working_dir: /app
+      ports:
+        - "8000:8000"
+      command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      depends_on:
+        - postgres
